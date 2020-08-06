@@ -133,7 +133,7 @@ module Coordinator @safe(){
 
 	void state_BackboneFormation(){
 		controlState = 13;
-		if( call compGW.selectGW(ListKnownChs) ){
+		if( call compCluster.selectGW(ListKnownChs) ){
 				msgGwAnnounce* pktGwAnnounce = (msgGwAnnounce*)(call Packet.getPayload(&pkt, sizeof()));
 				pktGwAnnounce->myID = myID;
 				msgId = call compLibMSG.GetNextMsgId( );

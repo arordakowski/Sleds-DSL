@@ -15,8 +15,7 @@ module Coordinator @safe(){
 		interface ComponentesLibMessage as compLibMSG;
 		interface ComponentesLibAggregation as compLibAggregation;
 	}
-}
-implementation {
+} implementation {
 	enum Message_Type { MAXWINNER = 1, MINWINNER, CMANNOUNCE, ELECTEDCH, GWANNOUNCE } IDMSG;
 	uint16_t controlState;
 	message_t pkt;
@@ -159,14 +158,13 @@ implementation {
 		call AMControl.stop();
 	}
 
-
 	/* NesC language envents */
 	event void Boot.booted() {
 		call AMControl.start();
 		state_INI();
 	}
 
-	//timer fired
+	// Timer fired
 	event void Timer.fired(){
 		if(controlState == 3){
 	 		state_SelectMaxWinner( );

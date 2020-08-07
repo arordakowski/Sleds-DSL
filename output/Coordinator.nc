@@ -1,4 +1,3 @@
-
 #include "Complements.h"
 
 module Coordinator @safe(){
@@ -29,7 +28,7 @@ module Coordinator @safe(){
 	int sensorList[20];
 	int ListMaxWinner[20];
 	int ListMinWinner[20];
-	int listKnownChs[20];
+	int ListKnownChs[20];
 
 	void state_INI(){
 		controlState = 1;
@@ -64,7 +63,7 @@ module Coordinator @safe(){
 		}
 	}
 
-	void state_FloodMin(	int minWinnerID){
+	void state_FloodMin(int minWinnerID){
 		controlState = 5;
 		msgId = call compLibMSG.GetNextMsgId( );
 		msgMinWinner* pktMinWinner = (msgMinWinner*)(call Packet.getPayload(&pkt, sizeof(msgMinWinner)));
@@ -80,7 +79,7 @@ module Coordinator @safe(){
 
 	void state_SelectMinWinner(){
 		controlState = 7;
-		winnerID = call compLibAggregation.MIN(ListMinWinner );
+		winnerID = call compLibAggregation.MIN(ListMinWinner);
 		if( round<dHops ){
 			round++;
 			state_FloodMin(winnerID);
@@ -100,7 +99,7 @@ module Coordinator @safe(){
 		controlState = 9;
 		msgCmAnnounce* pktCmAnnounce = (msgCmAnnounce*)(call Packet.getPayload(&pkt, sizeof(msgCmAnnounce)));
 		pktCmAnnounce->myID = myID;
-		compList.insert(sensorList, myCH);
+		call compList.insert(sensorList, myCH);
 		msgId = call compLibMSG.GetNextMsgId( );
 		int auxState9;
 		while(sensorList[auxState9]!=0){
@@ -112,7 +111,7 @@ module Coordinator @safe(){
 
 	void state_StoreMembers(){
 		controlState = 10;
-		compSensor->role = CM;
+		call compSensor.role(CM);
 		call Timer.startOneShot(tCluster);
 	}
 
@@ -133,7 +132,7 @@ module Coordinator @safe(){
 
 	void state_BackboneFormation(){
 		controlState = 13;
-		if( call compCluster.selectGW(ListKnownChs) ){
+		if( call compCluster.selectGW(ListKnownChs) == 1 ){
 				msgGwAnnounce* pktGwAnnounce = (msgGwAnnounce*)(call Packet.getPayload(&pkt, sizeof()));
 				pktGwAnnounce->myID = myID;
 				msgId = call compLibMSG.GetNextMsgId( );
@@ -142,7 +141,7 @@ module Coordinator @safe(){
 					call AMSend.send(listKnownChs[auxState13], &pkt, sizeof());
 					auxState13++;
 				}
-			compSensor->role = GW;
+			call compSensor.role(GW);
 			state_exit();
 		} else {
 			state_StoreGateways();
@@ -184,17 +183,17 @@ module Coordinator @safe(){
 		//O desempacotamento deve ser realizado em cada IF
 		if(controlState == 3){
 			msgMaxWinner* pktMaxWinner = (msgMaxWinner*)payload;
-			compList.insert(ListMaxWinner, pktMaxWinner->winnerID);
+			call compList.insert(ListMaxWinner, pktMaxWinner->winnerID);
 		} else if(controlState == 6){
 			msgMinWinner* pktMinWinner = (msgMinWinner*)payload;
 			ListMinWinner( pktMinWinner->winnerID );
 		} else if(controlState == 10){
 			msgCmAnnounce* pktCmAnnounce = (msgCmAnnounce*)payload;
-			compSensor->role = CH;
-			call compCH.setMembers(pktCmAnnounce->myID );
+			call compSensor.role(CH);
+			call compCluster.setMembers(pktCmAnnounce->myID );
 		} else if(controlState == 12){
 			msgElectedCh* pktElectedCh = (msgElectedCh*)payload;
-			compList.insert(ListKnownChs, pktElectedCh->myCH);
+			call compList.insert(ListKnownChs, pktElectedCh->myCH);
 		} else if(controlState == 14){
 			msgGwAnnounce* pktGwAnnounce = (msgGwAnnounce*)payload;
 			call compCH.setListGW(pktGwAnnounce->myID );

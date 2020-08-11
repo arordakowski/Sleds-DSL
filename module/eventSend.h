@@ -45,34 +45,3 @@ void setSend(char idMessT[35], char typePck[35], char idPck[35]) {
         //printf("\nIDSEND: %s -> tipo: %s  PCT: %s\n", idMessT, typePck, idPck);
     }
 }
-
-
-// Esta função imprime o métod Send no arquivo em nesC
-void printSend(FILE *arq ) {
-    
-    fprintf(arq, "\nvoid send ( int MsgType, int idMsg, GENERICMESSAGE* pktGeneric, int dest ){\n");
-    fprintf(arq, "\tpktGeneric->idMsg = idMsg;\n");
-    fprintf(arq, "\tpktGeneric->MsgType = MsgType;\n");
-//fprintf(arq, "%s* %s = (%s*)(call Packet.getPayload(&pkt, sizeof(%s)));\n", ptr->idTypePackage, ptr->idPckMessage, ptr->idTypePackage, ptr->idTypePackage);
-    fprintf(arq, "\tif(dest==0) {\n\t\tcall AMSend.send(AM_BROADCAST_ADDR, &pktGeneric, sizeof(GENERICMESSAGE));\n\t}");
-    fprintf(arq, "else {\n\t\tcall AMSend.send(dest, &pktGeneric, sizeof(GENERICMESSAGE));\n\t}\n}");
-
-}
-
-int contEnum;
-char vetEnum[10][20]; 	/* Vetor para armazenamento temporario das expressoes */
-
-void setEnum(char idEnum[35]){
-    strcpy(vetEnum[contEnum], idEnum);
-    printf("\nvet[%d] = %s\n", contEnum, idEnum);
-    contEnum++;
-}
-
-void printEnum(FILE *arq){
-    fprintf(arq,"\n\tenum Booleans { FALSE = 0, TRUE = 1 };");
-    fprintf(arq,"\n\tenum Message_Type { %s = 1", vetEnum[0] );
-    for(int x=1; x<contEnum; x++) { 
-        fprintf(arq,", %s", vetEnum[x]); 
-    }
-    fprintf(arq," } IDMSG;"); 
-}

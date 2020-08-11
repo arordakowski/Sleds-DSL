@@ -8,24 +8,29 @@ enum {
 };
 
 typedef nx_struct msgMaxWinner{
-	nx_uint16_t winnerID;
+	int winnerID;
+
 } msgMaxWinner;
  
 typedef nx_struct msgMinWinner{
-	nx_uint16_t winnerID;
+	int winnerID;
+
 } msgMinWinner;
  
 typedef nx_struct msgCmAnnounce{
-	nx_uint16_t myID;
+	int myID;
+
 } msgCmAnnounce;
  
 typedef nx_struct msgElectedCh{
-	nx_uint16_t myID;
-	nx_uint16_t myCH;
+	int myID;
+	int myCH;
+
 } msgElectedCh;
  
 typedef nx_struct msgGwAnnounce{
-	nx_uint16_t myID;
+	int myID;
+
 } msgGwAnnounce;
  
 #endif

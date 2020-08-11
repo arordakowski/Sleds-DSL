@@ -6,7 +6,7 @@ char expReceive[50][100]; 	// Vetor para armazenamento das expressoes do Receive
 int lastPosition;		// Salva a ultima posição do vetor
 
 //Esta função insere dados em uma lista encadeada.
-void imputReceive(char action[50][100], int aux) {
+void imputReceive(char action[50][200], int aux) {
 
     // Inserção de valores
     for(int i=0; i<aux; i++) {               // Laço para a inserção de action no receive  
@@ -26,5 +26,5 @@ void printReceive(FILE *arq){
         for(int i=0; i<lastPosition; i++){
         	fprintf(arq,"%s", expReceive[i]);     // Imprimindo a Action
 	}
-    fprintf(arq,"return msg;\n}\n");                        // Implementando retorno da msg e encerramento do RECEIVE
+    fprintf(arq,"\t}\n\treturn msg;\n}\n");                        // Implementando retorno da msg e encerramento do RECEIVE
 }

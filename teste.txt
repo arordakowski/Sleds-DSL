@@ -1,0 +1,63 @@
+use compSensor as ComponentsSensor;
+use compLibMSG as ComponentsLibMessage;
+use compList;
+
+message type{SensorId, AckSensorId};
+
+message SENSORID { int Id; };
+message ACKSENSORID { int Id; };
+
+Program Coordinator (){ 
+
+	SENSORID pktSensorId;
+	ACKSENSORID pktAckSensorId;
+
+	const tFlood = 25;
+	const tExit = 0.1;
+	int myID = compSensor->getSensorId();
+	list<int> listSensorAnnouncements[15]; 
+	int msgID;
+	
+	STATE INI(){
+		if (myID==1){
+			msgID = compLibMSG->GetNextMsgId();
+			pktSensorId->Id = myID;
+			broadcast(SensorId, msgID, pktSensorId);
+			compLibMSG->addSeenMsg(SensorId, msgID);
+			}
+		nextState WaitFirstSensorId();
+	}
+
+	STATE WaitFirstSensorId(){
+		on recvBroadcast(SensorId, msgID, pktSensorId){
+			listSensorAnnouncements.insert(pktSensorId->Id);
+			if (!compLibMSG->seenMsg(SensorId, msgId)){
+				compLibMSG->seenMsg(SensorId, msgId);
+				pktSensorId->Id = myID;
+				broadcast(SensorId, msgID, pktSensorId);
+			}
+		nextState FormNeighborList();
+		}
+	}
+
+	STATE FormNeighborList() {
+		during (tFlood) on recvBroadcast(SensorId, msgID, pktSensorId){
+			listSensorAnnouncements.insert(pktSensorId->Id);
+		}
+		nextState ACKNeighborList();
+	}
+
+	STATE ACKNeighborList() {
+		msgID = compLibMSG->GetNextMsgId();
+		pktAckSensorId->Id = myID;
+		send(AckSensorId, msgID, listSensorAnnouncements, pktAckSensorId);
+		nextState StoreNeighborList();
+	}
+
+	STATE StoreNeighborList() {
+		during (tExit) on recv(AckSensorId, msgID, pktAckSensorId){
+			compSensor->listKnowNeighbors( pktAckSensorId->Id );
+		}
+		nextState exit;
+	}
+}

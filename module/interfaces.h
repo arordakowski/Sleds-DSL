@@ -120,3 +120,52 @@ void generateImports(FILE *arq){
     }
   }
 }
+
+//Métodos que geram código especifico do nesC de maneira automática
+/* Método que realiza as traduções iniciais */
+int contEnum;
+char vetEnum[10][20]; 	/* Vetor para armazenamento temporario das expressoes */
+
+void setEnum(char idEnum[35]){
+    strcpy(vetEnum[contEnum], idEnum);
+    //printf("\nvet[%d] = %s\n", contEnum, idEnum);
+    contEnum++;
+}
+
+void printEnum(FILE *arq){
+    fprintf(arq,"\n\tenum Booleans { FALSE = 0, TRUE = 1 };");
+    fprintf(arq,"\n\tenum Message_Type { %s = 1", vetEnum[0] );
+    for(int x=1; x<contEnum; x++) { 
+        fprintf(arq,", %s", vetEnum[x]); 
+    }
+    fprintf(arq," } IDMSG;"); 
+}
+
+void initModulo(FILE *arq, char nome[]){
+
+	fprintf(arq,"\n#include \"Complements.h\"\n");
+	fprintf(arq,"\nmodule %s @safe(){\n\tuses{\n", nome);
+	fprintf(arq,"\t\tinterface Boot;\n\t\tinterface Packet;\n\t\tinterface AMPacket;\n\t\tinterface AMSend;\n");
+	fprintf(arq,"\t\tinterface Receive;\n\t\tinterface SplitControl as AMControl;\n\t\tinterface Timer<TMilli> as Timer;\n");
+	generateImports(arq);
+	fprintf(arq,"\t}\n}\nimplementation {");
+	printEnum(arq);
+	fprintf(arq,"\n\tmessage_t pkt;\n\tint controlState;\n\tint auxSend;\n");
+}
+
+void INIboot(FILE *arq, char StateINI[]){
+  fprintf(arq,"\n/* NesC language envents */\n");
+  fprintf(arq,"\nevent void Boot.booted() {\n\tcall AMControl.start();\n");
+  fprintf(arq,"\tstate_%s();\n}\n", StateINI);
+}
+
+
+void INIstartDone(FILE *arq){
+  fprintf(arq,"\nevent void AMControl.startDone(error_t err){\t}\n");
+  fprintf(arq,"\nevent void AMControl.stopDone(error_t err){\t}\n");
+  fprintf(arq,"\nevent void AMSend.sendDone( message_t* msg, error_t err) {\t}\n");
+}
+
+void printExit(FILE *arq){
+  fprintf(arq,"\n\tvoid state_exit( ){\n\t\tcall AMControl.stop();\n\t}\n");
+}

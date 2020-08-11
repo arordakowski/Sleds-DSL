@@ -2,8 +2,8 @@
 	#include <stdio.h>
 	#include <stdlib.h>
 	#include <string.h>
-	#include "module/geracode.h"
 	#include "module/interfaces.h"
+	#include "module/geracode.h"
 	#include "module/inferenceC.h"
 	#include "module/eventReceive.h"
 	#include "module/eventSend.h"
@@ -14,7 +14,7 @@
 	FILE *arqMsg;
 
 	int ctrState;
-	int aux, auxState, auxTimer, auxRecv;
+	int aux, auxState, auxTimer, auxRecv, firstRecv;
 	int TimerActions, ReceiveActions, LastState;
 
 	//Enumerado de Tipo
@@ -22,12 +22,12 @@
 	
 	// Contador para identificar as estruturas das mensagens como TIPOS
 	int tMsg = 20;
-	char nomeArq[20];
+
 	char entidade[20];
 	char comando[20];
 	char firstState[20];
 	
-	char expressao[50][100]; 	/* Vetor para armazenamento temporario das expressoes */
+	char expressao[100][200]; 	/* Vetor para armazenamento temporario das expressoes */
 	char expTimer[50][100]; 	/* Vetor para armazenamento temporario das expressoes do Timer */
 	char expReceive[50][100]; 	/* Vetor para armazenamento temporario das expressoes do Receive */
 	
@@ -36,7 +36,8 @@
 	int contEnum;
 
 	void eventosNesc();
-	void initModulo(char nome[]);
+	void geraArquivoSaida(char nome[20]);
+
 	void INIstartDone(FILE *arq);
 	void INIamStop(FILE *arq);
 	void INITimer();
@@ -59,10 +60,10 @@
 	%token 	INTEGER	REAL	STRING	LIST	MAP	BOOLEAN				//declarações
 	%token BACK	FRONT	NEXT	SIZE	INSERT				//funções da lista
 	%token IF	ELSE	FOR	WHILE	IN					//repetições e condicionais
-	%token 	DUPLO_MAIS DUPLO_MENOS	FALSO							//booleans
+	%token 	DUPLO_MAIS DUPLO_MENOS							//booleans
 	%token	TRUE_LITERAL FALSE_LITERAL 					//literal de booleans
 	%left POINTER '.'								//ponteiros
-	%nonassoc DUPLO_IGUAL '>'	'<'	MAIOR_IGUAL	MENOR_IGUAL			//booleans
+	%nonassoc DUPLO_IGUAL DIFERENTE '>' '<'	MAIOR_IGUAL	MENOR_IGUAL			//booleans
 	%token MESSAGE_TYPE MESSAGE								//mensagem
 	
 	%token IDENTIFIER
@@ -84,7 +85,7 @@ inicio: Use EnumMess Program ;
 
 // Declaração das bibliotecas importadas para a aplicação
 Use: 		/* empty */
-	|	USE IDENTIFIER AS IDENTIFIER';'	{ setId($2, tUse); openLibrary($4,$2); } Use
+	|	USE IDENTIFIER AS IDENTIFIER';'	{ setId($2, tUse); openLibrary($2,$4); } Use
 	|	USE IDENTIFIER ';' 		{ setId($2, tUse); openLibrary($2,$2); } Use
 ;
 
@@ -109,39 +110,40 @@ IdentMsg:
 ;
 
 // Regra raiz da aplicação (Basicamente: Program, Var_List e StateDef)
-Program: PROGRAM IDENTIFIER { initModulo($2); } 
-		'(' Var_List ')' '{' IdentMsg Const_List Var_List StateDef '}' 
-		{ printExit(arq); eventosNesc(); fprintf(arq,"\n}"); printf("\n\nEncerrado com sucesso!\n");}
+Program: PROGRAM IDENTIFIER { geraArquivoSaida($2); aux = 0; } 
+		'(' Var_List ')' '{' IdentMsg Const_List Var_List  {imprimirExpressao();}
+		StateDef '}' 
+		{ printExit(arq); printStates(arq); eventosNesc(); 
+		fprintf(arq,"\n}"); printf("\nCódigo em nesC gerado com sucesso!\n");}
 ;
 
 // Regra para a definição de um estado
 StateDef:	/* empty */
-	|	STATE IDENTIFIER  	
-			{ sprintf(expressao[aux++],"\n\tvoid state_%s(", $2); zerarVetor(); } 
-		'(' Var_List ')'  
-			{ setState($2, exprTipos); if(strcmp(firstState,"")==0){strcpy(firstState, $2);} 
-	 		ctrState++; sprintf(expressao[aux++],"){\n\t\tcontrolState = %d;\n", ctrState); }
-		'{' ActionList '}' 	
-			{ sprintf(expressao[aux++],"\t}\n");   
-	 		if(TimerActions==1){saveTimer(); sprintf(expressao[aux++],"\n}\n");TimerActions=0;} 
-			imprimirExpressao(); }
+	|	STATE  IDENTIFIER	{ storeState($2); sprintf(expressao[aux++],"\n\tvoid state_%s(", $2); } 
+		'(' Var_List ')' 	{ setState($2, exprTipos); 
+					if(strcmp(firstState,"")==0){strcpy(firstState, $2);} 
+	 				ctrState++; sprintf(expressao[aux++],"){");
+					sprintf(expressao[aux++],"\n\t\tcontrolState = %d;\n", ctrState); }
+		'{' ActionList '}' 	{ sprintf(expressao[aux++],"\t}\n");   
+	 				if(TimerActions==1){saveTimer(); sprintf(expressao[aux++],"\n}\n");TimerActions=0;} 
+					aux = storeExpState(expressao, aux); } 
 		StateDef
 ;
 
 // Regra para a chamada de um novo estado
 State: 	IDENTIFIER 			{ sprintf(expressao[aux++],"\tstate_%s(", $1);  }
-		'(' ExpList ')' ';' 	{ sprintf(expressao[aux++],");\n"); }
+		'(' ExpList ')' ';' 	{ sprintf(expressao[aux++],");\n"); } 
 	|	EXIT ';' 		{ sprintf(expressao[aux++],"\tstate_exit();\n"); }
 	;
 
 // Regra para definição das constantes
 Const_List:		/* empty */
 	|	CONST IDENTIFIER '=' INT_LITERAL ';'	
-	{ sprintf(expressao[aux++],"\tconst %s = %d;\n", $2, $4); setId($2, tInteiro); } Const_List
+	{ sprintf(expressao[aux++],"\tconst int %s = %d;\n", $2, $4); setId($2, tInteiro); } Const_List
 	|	CONST IDENTIFIER '=' REAL_LITERAL ';'	
-	{ sprintf(expressao[aux++],"\tconst %s = %.2f;\n", $2, $4); setId($2, tReal); } Const_List
+	{ sprintf(expressao[aux++],"\tconst double %s = %.2f;\n", $2, $4); setId($2, tReal); } Const_List
 	|	CONST IDENTIFIER '=' STR_LITERAL ';'	
-	{ sprintf(expressao[aux++],"\tconst %s = %s;\n", $2, $4); setId($2, tString); } Const_List
+	{ sprintf(expressao[aux++],"\tconst char %s[20] = sprintf(%s; \"%s\");\n", $2, $2, $4); setId($2, tString); } Const_List
 ;
 
 // Regra para definição das variaveis
@@ -157,7 +159,7 @@ Var_List:		/* empty */
 // Identificação das variaveis
 Var: 		/* empty */
 	|	IDENTIFIER ';' { sprintf(expressao[aux++],"%s;\n", $1); setId($1,  exprTipos[auxTipos-1]); }  
-	|	IDENTIFIER { sprintf(expressao[aux++],"%s,", $1);  setId($1, exprTipos[auxTipos-1]); } "," Var	
+	|	IDENTIFIER { sprintf(expressao[aux++],"%s, ", $1);  setId($1, exprTipos[auxTipos-1]); } ',' Var	
 	|	IDENTIFIER { sprintf(expressao[aux++],"%s", $1);  setId($1, exprTipos[auxTipos-1]); }
 	|	Assignment
 ;
@@ -175,7 +177,7 @@ ActionList:
 ;
 
 // Regra que indica as ações
-Action:		Next_State	
+Action:		Next_State
 	|	Broadcast	
 	|	Send		
 	|	Recv
@@ -189,7 +191,7 @@ Action:		Next_State
 ;
 
 // Regra para mudança de estado
-Next_State: NEXT_STATE State ;
+Next_State: NEXT_STATE State; 
 
 // Regra para envio de mensagens BROADCAST
 Broadcast: 	BROADCAST '(' IDENTIFIER ',' IDENTIFIER ',' IDENTIFIER ')' ';' 
@@ -202,45 +204,47 @@ sprintf(expressao[aux++],"\tcall AMSend.send(AM_BROADCAST_ADDR, &pkt, sizeof(%s)
 // Regra para envio de mensagens a uma lista de destinatarios
 Send: 	SEND '('IDENTIFIER ',' IDENTIFIER ',' IDENTIFIER ',' IDENTIFIER')' ';'
 {//setSend($3, getTypeMessage($9), $9);
-sprintf(expressao[aux++],"int auxState%d;\n", ctrState);
- sprintf(expressao[aux++],"\twhile(%s[auxState%d]!=0){\n", $7, ctrState); 
- sprintf(expressao[aux++],"\t\tcall AMSend.send(%s[auxState%d], &pkt, sizeof(%s));\n",$7, ctrState, getTypeMessage($9));
- sprintf(expressao[aux++],"\t\tauxState%d++;\n", ctrState);
+sprintf(expressao[aux++],"auxSend = 0;\n");
+ sprintf(expressao[aux++],"\twhile(%s[auxSend]!=0){\n", $7); 
+ sprintf(expressao[aux++],"\t\tcall AMSend.send(%s[auxSend], &pkt, sizeof(%s));\n",$7, getTypeMessage($9));
+ sprintf(expressao[aux++],"\t\tauxSend++;\n");
  sprintf(expressao[aux++],"\t}\n");
 }
 ;
 
 
 Recv:	RECV  '(' IDENTIFIER ',' IDENTIFIER ',' IDENTIFIER ')'   
-	{imprimirExpressao(); ReceiveActions=1;
-	sprintf(expressao[aux++],"\t\tif(controlState == %d){\n", ctrState); 
-	sprintf(expressao[aux++],"\t\t\t%s* %s = (%s*)payload;\n", getTypeMessage($7), $7, getTypeMessage($7) );
-	} 
+	{aux = storeExpState(expressao, aux); ReceiveActions=1;
+	if(firstRecv==0) {sprintf(expressao[aux++],"\t\tif(controlState == %d){\n", ctrState); firstRecv++;}
+	else sprintf(expressao[aux++],"\t}else if(controlState == %d){\n", ctrState); 
+	sprintf(expressao[aux++],"\t\t%s* %s = (%s*)payload;\n", getTypeMessage($7), $7, getTypeMessage($7) );} 
 	'{' ActionList '}' 
-	{sprintf(expressao[aux++],"\t\t}\n"); saveReceive(); }
+	{ saveReceive(); }
 
 	| RECV_BROADCAST '(' IDENTIFIER ',' IDENTIFIER ',' IDENTIFIER ')'  
-	{imprimirExpressao(); ReceiveActions=1;
-	 sprintf(expressao[aux++],"\tif(controlState == %d){\n", ctrState);
-	sprintf(expressao[aux++],"\t%s* %s = (%s*)payload;\n", getTypeMessage($7), $7, getTypeMessage($7) ); 
-	} '{' ActionList '}'	
-	{sprintf(expressao[aux++],"\t}\n"); 
-	 saveReceive(); 
-	} 
+	{aux = storeExpState(expressao, aux); ReceiveActions=1;
+	if(firstRecv==0) {sprintf(expressao[aux++],"\tif(controlState == %d){\n", ctrState); firstRecv++;}
+	else  sprintf(expressao[aux++],"\t} else if(controlState == %d){\n", ctrState);
+	sprintf(expressao[aux++],"\t\t%s* %s = (%s*)payload;\n", getTypeMessage($7), $7, getTypeMessage($7) ); }
+ 	'{' ActionList '}'	
+	 {saveReceive(); } 
 ;
 
 During:	DURING { sprintf(expressao[aux++],"\tcall Timer.startOneShot("); TimerActions = 1; }
 		'('Exp')'  { sprintf(expressao[aux++],");");} During_Recv
 ;
 
-During_Recv: '{'{ imprimirExpressao(); sprintf(expressao[aux++],"\tif(controlState == %d){\n", ctrState); } 
+During_Recv: '{'{ aux = storeExpState(expressao, aux); sprintf(expressao[aux++],"\tif(controlState == %d){\n", ctrState); } 
 			ActionList '}'
-	|	{ imprimirExpressao(); } Recv
+	|	Recv
 ;
+
 
 While: 	WHILE '(' { sprintf(expressao[aux++],"\twhile( "); } Exp ')' { sprintf(expressao[aux++],"){\n "); } 
 		'{' ActionList '}' { sprintf(expressao[aux++],"\t}\n"); }
 ;
+
+
 
 For:	FOR IDENTIFIER IN IDENTIFIER 
 		{ sprintf(expressao[aux++],"\tfor (int x=0; x < compList.size(%s); x++){\n", $4);
@@ -275,18 +279,25 @@ Exp:
 	|	STR_LITERAL { sprintf(expressao[aux++],"%s", $1); exprTipos[auxTipos++]=tString; } Exp
 	|	INT_LITERAL { sprintf(expressao[aux++],"%d", $1); exprTipos[auxTipos++]=tInteiro; } Exp
 	|	REAL_LITERAL { sprintf(expressao[aux++],"%f", $1); exprTipos[auxTipos++]=tReal; } Exp
+	|	TRUE_LITERAL 	{ sprintf(expressao[aux++],"TRUE"); }
+	|	FALSE_LITERAL 	{ sprintf(expressao[aux++],"FALSE"); } 
 	|	'(' { sprintf(expressao[aux++],"( "); } ExpList ')' { sprintf(expressao[aux++]," )"); } Exp
 	|	ExprMat  Exp
-	|	ExprBool Exp	
+	|	ExprBool Exp
+	|	Incremento Exp	
 	|	SetMsg
-	|	Entidade
+	|	Entidade Exp
 	|	List_Func
 ;
 
-List_Func: IDENTIFIER '.' INSERT	{ sprintf(expressao[aux++],"\tcompList.insert(%s, ", $1); } 
+Incremento: 	IDENTIFIER DUPLO_MAIS { sprintf(expressao[aux++],"%s++", $1); } 
+	|	IDENTIFIER DUPLO_MENOS { sprintf(expressao[aux++],"%s--", $1); }
+;
+
+List_Func: IDENTIFIER '.' INSERT	{ sprintf(expressao[aux++],"\tcall compList.insert(%s, ", $1); } 
 		'(' Exp ')' 	{ sprintf(expressao[aux++],")"); setCommand("compList", "size", tInteiro, exprTipos); }
 	| IDENTIFIER '.' SIZE '(' ')'  
-		{ sprintf(expressao[aux++],"compList.size(%s)", $1);  setCommand("compList", "size", tInteiro, exprTipos); } 
+		{ sprintf(expressao[aux++],"call compList.size(%s)", $1);  setCommand("compList", "size", tInteiro, exprTipos); } 
 	| IDENTIFIER '.' NEXT '(' ')' 
 		{ sprintf(expressao[aux++],"%s[x]", $1); setCommand("compList", "next", tInteiro, 0); }
 	| IDENTIFIER '.' FRONT '(' ')' 
@@ -295,11 +306,13 @@ List_Func: IDENTIFIER '.' INSERT	{ sprintf(expressao[aux++],"\tcompList.insert(%
 ;
 
 SetMsg:	IDENTIFIER POINTER IDENTIFIER 
-	{ if(ReceiveActions==0){
-		 sprintf(expressao[aux++],"\t%s* %s = (%s*)",getTypeMessage($1), $1, getTypeMessage($1));
- 		sprintf(expressao[aux++],"(call Packet.getPayload(&pkt, sizeof(%s)));\n", getTypeMessage($1)); }
-		sprintf(expressao[aux++],"%s->%s", $1, $3);
+	{if(ReceiveActions==0){
+		char structMsg[120];
+		sprintf(structMsg,"\t%s* %s = (%s*)(call Packet.getPayload(&pkt, sizeof(%s)));\n",getTypeMessage($1), $1, 			getTypeMessage($1), getTypeMessage($1)); 
+		storeMsgHeader(structMsg);
 	}
+	
+	sprintf(expressao[aux++],"%s->%s", $1, $3); }
 ;
 
 Entidade: 	
@@ -309,37 +322,18 @@ Entidade:
 	}
 ;
 
-/*
-Soma:	 Soma '+' { sprintf(expressao[aux++]," + "); } 		Soma
-		|	Soma '-' { sprintf(expressao[aux++]," - "); }	Soma
-		|	Soma '*' { sprintf(expressao[aux++]," * "); }	Soma
-		|	Soma '/' { sprintf(expressao[aux++]," / "); } 	Soma
-		|	Multi
-;
-
-Multi:	Multi '*' { sprintf(expressao[aux++]," * "); } Multi
-		| 	Multi	'/' { sprintf(expressao[aux++]," / "); } Multi
-		|	Parent
-;
-
-Parent:	'(' Soma ')'
-		|	INT_LITERAL		{auxTipos = tInt; }
-		|	REAL_LITERAL	{auxTipos = tReal; }
-;
-*/
-
 ExprMat:	'+' { sprintf(expressao[aux++]," + "); }
 		|	'-' { sprintf(expressao[aux++]," - "); }
 		|	'*' { sprintf(expressao[aux++]," * "); }
 		|	'/' { sprintf(expressao[aux++]," / "); } 
 ;
 
-ExprBool: 	 DUPLO_IGUAL  { sprintf(expressao[aux++]," == "); } 
-		|	MAIOR_IGUAL { sprintf(expressao[aux++],"<="); } 
-		|	MENOR_IGUAL { sprintf(expressao[aux++],">="); } 
-		|	FALSO 		{ sprintf(expressao[aux++],"!"); } 
+ExprBool: 	 DUPLO_IGUAL  		{ sprintf(expressao[aux++]," == "); } 
+		|	MAIOR_IGUAL 	{ sprintf(expressao[aux++],"<="); } 
+		|	MENOR_IGUAL 	{ sprintf(expressao[aux++],">="); } 
+		|	DIFERENTE	{ sprintf(expressao[aux++],"!="); } 
 		|	'>' 		{ sprintf(expressao[aux++],">"); } 
-		|	'<' 		{ sprintf(expressao[aux++],"<"); } 
+		|	'<' 		{ sprintf(expressao[aux++],"<"); }
 ;
 
 ExpList: 	Exp		
@@ -377,20 +371,27 @@ ExpList: 	Exp
 
 	/* Método que armazena as expressoes do Timer */
 	void saveTimer(){
-		if(LastState != ctrState){
-			sprintf(expTimer[auxTimer++],"\tif(controlState == %d){\n", ctrState);
-			LastState = ctrState;
+		
+		while(strcmp(expTimer[auxTimer],"")!=0){
+			auxTimer++;
+		}
+		if(auxTimer==0){
+			sprintf(expTimer[auxTimer],"\tif(controlState == %d){\n", ctrState);
+		} else{	
+			sprintf(expTimer[auxTimer],"\telse if(controlState == %d){\n", ctrState);
 		}
 		for(int i=0; i<aux; i++) {
-			strcpy(expTimer[auxTimer++],expressao[i]);
+			sprintf(expTimer[auxTimer],"%s %s",expTimer[auxTimer], expressao[i]);
+			//strcpy(expTimer[auxTimer++],expressao[i]);
 		}
 		aux = 0;
 	}
 
 	/* Método que imprime as expressoes do Timer */
 	void INITimer(){
+		//printf("aux timer: %d", auxTimer);
 		fprintf(arq,"\n//timer fired\nevent void Timer.fired(){\n");
-		for(int i=0; i<auxTimer; i++) {
+		for(int i=0; i<=auxTimer; i++) {
 			fprintf(arq,"%s",expTimer[i]);
 		}
 		fprintf(arq,"}\n");
@@ -404,26 +405,7 @@ ExpList: 	Exp
 	}
 
 
-	/* Método que realiza as traduções iniciais */
-	void initModulo(char nome[]){
-
-		sprintf(nomeArq, "./output/%s.nc", nome);
-		//printf("\n%s", nomeArq);
-		arq = fopen(nomeArq,"w");
-
-		fprintf(arq,"\n#include \"Complements.h\"\n");
-		fprintf(arq,"\nmodule %s @safe(){\n\tuses{\n", nome);
-		fprintf(arq,"\t\tinterface Boot;\n\t\tinterface Packet;\n\t\tinterface AMSend;\n\t\tinterface Receive;\n");
-		fprintf(arq,"\t\tinterface SplitControl as AMControl;\n\t\tinterface Timer<TMilli> as Timer;\n");
-		generateImports(arq);
-		fprintf(arq,"\t}\n");
-		fprintf(arq,"}\nimplementation {");
-		printEnum(arq);
-		fprintf(arq,"\n\tuint16_t controlState;\n\tmessage_t pkt;\n");
-		aux = 0;
-	}
-
-	void openLibrary(char nomeUse[35], char nome[35]) {
+	void openLibrary(char nome[35], char nomeUse[35]) {
 
 		FILE *arquivo;
 
@@ -432,23 +414,32 @@ ExpList: 	Exp
 		arquivo = fopen(endereco, "r");
 
 		if(arquivo != NULL){
-			printf("\nA interface da bilioteca %s já existe.\n", nome);
+			setCompName(nome, nomeUse);
+			//printf("\nA interface da bilioteca %s já existe.\n", nome);
 		} else {
-			setCompName(nomeUse, nome);
-			printf("\nCriando arquivo do Componente %s\n", nome);
+			setCompName(nome, nomeUse);
+			//printf("\nCriando arquivo do Componente %s\n", nome);
 		}
+	}
+
+	void geraArquivoSaida(char nome[20]){
+		char nomeArq[20];
+		sprintf(nomeArq, "./output/%s.nc", nome);
+		arq = fopen(nomeArq,"w");
+		initModulo(arq, nome);
+		imprimirExpressao();
 	}
 
 
 	int main() {
-
 		
 		arqMsg = fopen("./output/Complements.h","w");
 		fprintf(arqMsg,"\n#ifndef COMPLEMENTS_H\n#define COMPLEMENTS_H\n");
 		fprintf(arqMsg,"\nenum {\n\tAM = 6,\n\tTIMER_PERIOD_MILLI = 150\n};\n");
+
 		yyparse();
 
-		//printGenericMsg(arqMsg);
+		fprintf(arqMsg,"\n#endif");
 		gerarInterfaces();
 
 	}

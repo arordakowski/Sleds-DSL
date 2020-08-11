@@ -157,8 +157,8 @@ char * getTypeMessage(char namePct[]){
 
 //Abaixo estão os métods que implementam os STRUCTS das mensagens = Complements.h
 
-char tiposMessage[5][30]; 	/* Vetor para armazenamento dos structs de tipos de msg*/
-char pacotesMsg[5][30]; 	/* Vetor para armazenamento dos pacotes de mensagens */
+char tiposMessage[8][30]; 	/* Vetor para armazenamento dos structs de tipos de msg*/
+char pacotesMsg[8][30]; 	/* Vetor para armazenamento dos pacotes de mensagens */
 int contMess;
 
 // Esta função insere um tipo de mensagem e seu pacote na tabela de simbolos
@@ -180,24 +180,8 @@ void setMessage(char tipoMessage[], char namePct[]){
     raiz = novoIdentifier;              // O novo nó passa a ser a raiz
 }
 
-
-/*
-void printGenericMsg(FILE *arqMsg){
-    
-    fprintf(arqMsg,"\ntypedef nx_struct GENERICMESSAGE{\n");
-    fprintf(arqMsg,"\tint idMsg;\n\tint MsgType;\n\tunion{\n");
-
-    for(int i=0; i<contMess; i++){
-        fprintf(arqMsg,"\t\t%s* %s;\n", tiposMessage[i], pacotesMsg[i]);
-    }
-    fprintf(arqMsg,"\t}\n} GENERICMESSAGE;\n ");
-    fprintf(arqMsg,"\n#endif");
-}
-*/
-
-
 /* Método que imprime os STRUCTS de cada tipo de mensagem */
-void printExpMsg(FILE *arqMsg, char msg[35], char expressao[50][100], int aux){
+void printExpMsg(FILE *arqMsg, char msg[35], char expressao[50][200], int aux){
     
     fprintf(arqMsg,"\ntypedef nx_struct %s{\n", msg);
 	for(int i=0; i<aux; i++) {

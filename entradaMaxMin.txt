@@ -1,0 +1,140 @@
+use compSensor as ComponentesSensor;
+use compCluster as ComponentesCluster;
+use compLibMSG as ComponentesLibMessage;
+use compLibAggregation as ComponentesLibAggregation;
+use compList;
+
+message type {MAXWINNER, MINWINNER, CMANNOUNCE, ELECTEDCH, GWANNOUNCE}; 
+
+message msgMaxWinner { int winnerID; };
+message msgMinWinner { int winnerID; };
+message msgCmAnnounce { int myID; };
+message msgElectedCh { int myID; int myCH; };
+message msgGwAnnounce { int myID; };
+
+Program  Coordinator () {
+
+msgMaxWinner pktMaxWinner;
+msgMinWinner pktMinWinner;
+msgCmAnnounce pktCmAnnounce;
+msgElectedCh pktElectedCh;
+msgGwAnnounce pktGwAnnounce;
+
+const  dHops=2;
+const  tFloodMAX=25;
+const  tFloodMIN=25;
+const  tCluster=25;
+const  tElectedCH=25;
+const  tExit=0.1;
+
+int  round, msgId, myID, winnerID, myCH;
+list <int> sensorList[20];
+list <int> ListMaxWinner[20];
+list <int> ListMinWinner[20];
+list <int> ListKnownChs[20];
+
+STATE INI(){
+	myID=compSensor->getSensorId();
+	winnerID=myID;
+	nextState FloodMax(winnerID);
+}
+
+STATE  FloodMax(int maxWinnerID) {
+	msgId = compLibMSG ->GetNextMsgId();
+	pktMaxWinner->winnerID = maxWinnerID;
+	broadcast(MAXWINNER , msgId, pktMaxWinner);
+	nextState  StoreMaxWinner(); 
+}
+
+STATE  StoreMaxWinner () {
+	during (tFloodMAX) on recv(MAXWINNER, msgID, pktMaxWinner) {
+	    ListMaxWinner.insert(pktMaxWinner->winnerID); }
+	nextState  SelectMaxWinner (); }
+
+STATE  SelectMaxWinner () {
+	winnerID = compLibAggregation->MAX(ListMaxWinner);
+	if (round < dHops) {
+	    round++;
+		nextState  FloodMax( winnerID ); 
+	} else {
+	    round=0;
+	    nextState FloodMin(myID); } }
+
+STATE  FloodMin ( int minWinnerID ) {
+    msgId = compLibMSG->GetNextMsgId();
+    pktMinWinner->winnerID = minWinnerID;
+    broadcast(MINWINNER , msgId, pktMinWinner);
+    nextState  StoreMinWinner (); }
+
+STATE  StoreMinWinner ( ) {
+    during (tFloodMIN) on recv(MINWINNER, msgID, pktMinWinner) {
+        ListMinWinner( pktMinWinner->winnerID ); }
+    nextState  SelectMinWinner (); }
+
+STATE  SelectMinWinner () {
+    winnerID = compLibAggregation->MIN( ListMinWinner );
+    if (round < dHops) {
+        round++;
+        nextState  FloodMin( winnerID ); 
+    } else {
+        round=0;
+        nextState SelectCH(); 
+    } 
+}
+
+STATE  SelectCH () {
+    	myCH = compCluster->selectCH(ListMaxWinner, ListMinWinner);
+    	nextState  ClusterFormation (); 
+}	
+    
+STATE  ClusterFormation () {
+	pktCmAnnounce->myID = myID;
+	sensorList.insert(myCH);
+	msgId = compLibMSG->GetNextMsgId();
+    	send(CMANNOUNCE, msgId, sensorList, pktCmAnnounce);
+   	nextState  StoreMembers (); 
+}
+    
+STATE  StoreMembers () {
+	compSensor->role(CM);    	
+	during (tCluster) on recv(CMANNOUNCE, msgID, pktCmAnnounce) {
+		compSensor->role(CH);        	
+		compCluster->setMembers( pktCmAnnounce->myID ); 
+	} 
+	nextState  ElectedCH(); 
+}
+
+STATE  ElectedCH () { 
+	pktElectedCh->myID = myID;
+	pktElectedCh->myCH = myCH;
+	msgId = compLibMSG->GetNextMsgId();
+    	broadcast(ELECTEDCH, msgId , pktElectedCh );
+    	nextState  StoreKnownCHs(); 
+}
+    
+STATE  StoreKnownCHs () {
+    	during (tElectedCH) on recv(ELECTEDCH, msgID , pktElectedCh) {
+        	ListKnownChs.insert( pktElectedCh->myCH ); 
+	}
+    	nextState  BackboneFormation(); 
+}
+    
+STATE  BackboneFormation () {
+    	if (compCluster->selectGW(ListKnownChs)==TRUE) {
+		pktGwAnnounce->myID = myID;
+		msgId = compLibMSG->GetNextMsgId();
+        	send(GWANNOUNCE, msgId, listKnownChs, pktGwAnnounce);
+        	compSensor->role(GW);
+        	nextState  exit;
+    	} else {
+        	nextState  StoreGateways (); 
+	} 
+}
+
+STATE  StoreGateways () {
+    	during (tExit) on recv(GWANNOUNCE , msgID, pktGwAnnounce) {
+        	compCluster->setListGW( pktGwAnnounce->myID  ); 
+	}
+	nextState  exit; 
+} 
+}

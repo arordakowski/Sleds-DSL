@@ -3,4 +3,4 @@ default:
 	bison -dv sintatico.y
 	gcc -o comp sintatico.tab.c	lex.yy.c -lfl
 
-	./comp < MaxMin.txt 
+	./comp < entradaMaxMin.txt 

@@ -64,6 +64,7 @@ in					{ return IN; }
 ","					{ return *yytext; }
 "|"					{ return *yytext; }
 "=="					{ return DUPLO_IGUAL; }
+"!="					{ return DIFERENTE; }
 "="					{ return *yytext; }
 ">"					{ return *yytext; }
 "<"					{ return *yytext; }
@@ -76,10 +77,10 @@ in					{ return IN; }
 "-"					{ return *yytext; }
 "*"					{ return *yytext; }
 "/"					{ return *yytext; }
-"!"					{ return FALSO; }
+
 
 [ \t]					{ }
-[ \n]					{ printf("%d", linha++);}
+[ \n]					{ }//printf("%d", linha++);}
 
 true                    		{ return TRUE_LITERAL; }
 false                   		{ return FALSE_LITERAL; }
